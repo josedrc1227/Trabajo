@@ -1,0 +1,918 @@
+---
+title: "DISTRIBUCIONES DE FRECUENCIAS"
+subtitle: "TALLER DE ESTADÍSTICA DESCRIPTIVA - ANÁLISIS DEL SECTOR PÚBLICO"
+author: 
+  - name: "Jose David Rodriguez Cortes"
+    affiliation: "Escuela Superior de Administración Pública (ESAP)"
+    affiliation-url: "https://www.esap.edu.co/"
+date: "2026-11-16"
+lang: es
+title-block-banner: "#98b6ed"
+
+format:
+  html:
+    embed-resources: true
+    page-layout: full
+    fontsize: 14pt
+    toc: true
+    toc-location: right
+    number-sections: true
+    code-fold: true
+    code-summary: "Ver código"
+    theme: dark
+    highlight-style: monokai
+    html-math-method: katex
+    smooth-scroll: true
+    link-external-newwindow: true
+    code-overflow: scroll
+    favicon: favicon.ico
+    
+editor: visual
+
+knitr:
+  opts_chunk:
+    message: false
+    warning: false
+    fig.align: center
+    fig.width: 8
+    fig.height: 5
+    out.width: "80%"
+---
+
+```{r setup}
+options(
+  knitr.table.format = "html",
+  scipen = 999
+)
+```
+
+```{=html}
+<div style="position:absolute; top:10px; right:10px;">
+<img src="Logo_Esap.png" width="150">
+</div>
+```
+
+```{=html}
+<style>
+body{
+  background-color:#f7f6ed;
+  font-size:130%;
+  text-align:justify;
+}
+.table-container {
+  margin-top: 15px;
+  margin-bottom: 20px;
+}
+.interpretation-box {
+  background-color: #2e3440;
+  color: #eceff4;
+  padding: 15px;
+  border-left: 5px solid #88c0d0;
+  border-radius: 4px;
+  margin-top: 15px;
+  margin-bottom: 25px;
+}
+.katex-display {
+  overflow-x: auto;
+  max-width: 100%;
+}
+</style>
+```
+
+# .Cargar paquetes
+
+```{r}
+ipak <- function(pkg){
+
+  options(repos = c(CRAN="https://cloud.r-project.org"))
+
+  new.pkg <- pkg[!(pkg %in% rownames(installed.packages()))]
+
+  if(length(new.pkg)) install.packages(new.pkg, dependencies = TRUE)
+
+  invisible(lapply(pkg, function(p)
+    suppressPackageStartupMessages(library(p, character.only = TRUE))
+  ))
+}
+
+packages <- c("tidyverse","kableExtra","psych","readxl")
+
+ipak(packages)
+```
+
+# Introducción y Diccionario de Variables
+
+El presente informe desarrolla el análisis estadístico descriptivo univariado para una muestra representativa de $n = 200$ servidores públicos pertenecientes a distintas dependencias del Estado, registrados en la base de datos `sector.xlsx`. El propósito principal consiste en caracterizar las condiciones socioeconómicas, demográficas y de percepción del talento humano a través de tablas completas de distribución de frecuencias, estadísticos de resumen y representaciones gráficas especializadas.
+
+A continuación se resume la estructura y clasificación metodológica de las 10 variables analizadas, según lo estipulado en el *Diccionario de Variables*:
+
+```{r}
+diccionario <- tibble::tribble(
+  ~`N°`, ~Variable, ~Tipo, ~Escala, ~Descripción, ~Valores_Rango,
+  "1", "Sector_Laboral", "Cualitativa", "Nominal", "Sector de la administración pública donde labora el encuestado", "Seguridad, Educación, Salud, Transporte, Administrativo",
+  "2", "Nivel_Ingresos", "Cualitativa", "Ordinal", "Nivel salarial o de ingresos socioeconómicos percibido", "Baja < Media < Alta",
+  "3", "Satisfaccion_Servicio", "Cualitativa", "Ordinal", "Nivel de satisfacción con los servicios recibidos o brindados", "Muy Insatisfecho < Insatisfecho < Neutral < Satisfecho < Muy Satisfecho",
+  "4", "Frecuencia_Participacion", "Cualitativa", "Ordinal", "Frecuencia de participación en programas de la administración", "Nunca < Rara vez < A veces < Frecuentemente < Siempre",
+  "5", "Anos_Experiencia", "Cuantitativa", "Discreta", "Años enteros de experiencia laboral en el sector público", "Números enteros de 0 a 20 años",
+  "6", "Numero_Hijos", "Cuantitativa", "Discreta", "Número total de hijos a cargo del servidor público", "Números enteros de 1 a 5 hijos",
+  "7", "Salario", "Cuantitativa", "Continua", "Salario mensual del funcionario (en miles de pesos COP)", "Valores continuos de 1000 a 5000 miles COP",
+  "8", "Satisfaccion_Laboral", "Cuantitativa", "Continua", "Puntuación continua de satisfacción con el clima laboral", "Escala continua de 0.5 a 2.5 puntos",
+  "9", "Edad", "Cuantitativa", "Continua", "Edad biológica del funcionario en años cumplidos", "Rango continuo de 20 a 60 años",
+  "10", "Participacion_Programas", "Cuantitativa", "Continua", "Proporción de participación en programas de capacitación", "Rango continuo de 0.1 a 1.0 (10% a 100%)"
+)
+
+kbl(diccionario, caption = "Diccionario de Variables: Clasificación Estadística y Metodológica (sector.xlsx)") |> 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = TRUE) |>
+  row_spec(0, bold = TRUE, background = "#2b5c8f", color = "white")
+```
+
+# Importación y Preparación de la Base de Datos
+
+Se procede con la lectura del archivo `sector.xlsx` correspondiente a la hoja `Sheet1`, la transformación rigurosa de las tres variables ordinales en factores con niveles ordenados (`ordered = TRUE`) y la verificación de integridad de datos.
+
+```{r}
+# 1. Lectura de la base de datos
+datos <- read_excel("sector.xlsx", sheet = "Sheet1")
+
+# 2. Transformación de variables ordinales respetando su jerarquía intrínseca
+datos$Nivel_Ingresos <- factor(
+  datos$Nivel_Ingresos, 
+  levels = c("Baja", "Media", "Alta"), 
+  ordered = TRUE
+)
+
+datos$Satisfaccion_Servicio <- factor(
+  datos$Satisfaccion_Servicio, 
+  levels = c("Muy Insatisfecho", "Insatisfecho", "Neutral", "Satisfecho", "Muy Satisfecho"), 
+  ordered = TRUE
+)
+
+datos$Frecuencia_Participacion <- factor(
+  datos$Frecuencia_Participacion, 
+  levels = c("Nunca", "Rara vez", "A veces", "Frecuentemente", "Siempre"), 
+  ordered = TRUE
+)
+
+# 3. Verificación de dimensiones y valores faltantes
+dimensiones <- dim(datos)
+faltantes <- sum(is.na(datos))
+
+cat("Dimensiones de la base: ", dimensiones[1], " filas y ", dimensiones[2], " columnas.\n")
+cat("Total de valores faltantes (NA): ", faltantes, ".\n")
+
+# 4. Vista previa de los primeros 10 registros
+head(datos, 10) |> 
+  kbl(caption = "Muestra inicial de 10 registros de la base de datos sector.xlsx") |> 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = FALSE) |>
+  row_spec(0, bold = TRUE, background = "#34495e", color = "white")
+```
+
+```{r funciones-auxiliares}
+# ==============================================================================
+# FUNCIONES AUXILIARES PARA DISTRIBUCIONES DE FRECUENCIAS Y ESTADÍSTICOS
+# ==============================================================================
+
+# Función para variables Categóricas (Nominales y Ordinales) y Discretas
+generar_tabla_cat <- function(vector_datos, nombre_columna = "Categoría") {
+  n_total <- length(vector_datos)
+  tb <- as.data.frame(table(vector_datos))
+  colnames(tb) <- c("x_i", "f_i")
+  
+  tb <- tb %>%
+    mutate(
+      F_i = cumsum(f_i),
+      h_i = f_i / n_total,
+      H_i = cumsum(h_i),
+      p_i = h_i * 100,
+      P_i = H_i * 100
+    )
+  
+  tb_formateada <- tb %>%
+    mutate(
+      h_i_txt = sprintf("%.4f", h_i),
+      H_i_txt = sprintf("%.4f", H_i),
+      p_i_txt = sprintf("%.2f%%", p_i),
+      P_i_txt = sprintf("%.2f%%", P_i)
+    ) %>%
+    select(x_i, f_i, F_i, h_i_txt, H_i_txt, p_i_txt, P_i_txt)
+  
+  fila_total <- data.frame(
+    x_i = "Total",
+    f_i = n_total,
+    F_i = "-",
+    h_i_txt = "1.0000",
+    H_i_txt = "-",
+    p_i_txt = "100.00%",
+    P_i_txt = "-"
+  )
+  
+  tabla_final <- rbind(tb_formateada, fila_total)
+  colnames(tabla_final) <- c(
+    paste0(nombre_columna, " (xᵢ)"),
+    "fᵢ", "Fᵢ", "hᵢ", "Hᵢ", "pᵢ (%)", "Pᵢ (%)"
+  )
+  return(tabla_final)
+}
+
+# Función para variables Continuas agrupadas por la Regla de Sturges (k = 9)
+generar_tabla_continua <- function(vector_datos, k = 9, digits = 2, nombre_columna = "Intervalo") {
+  n_total <- length(vector_datos)
+  min_val <- min(vector_datos)
+  max_val <- max(vector_datos)
+  
+  breaks <- seq(min_val, max_val, length.out = k + 1)
+  fmt <- paste0("%.", digits, "f")
+  
+  # Construcción de etiquetas explícitas [Li, Ls) y la última [Lk, L_{k+1}]
+  labels_int <- character(k)
+  for (i in 1:k) {
+    c_close <- if (i == k) "]" else ")"
+    labels_int[i] <- paste0("[", sprintf(fmt, breaks[i]), ", ", sprintf(fmt, breaks[i + 1]), c_close)
+  }
+  
+  # Marcas de clase xi = (Li + Ls) / 2
+  marcas_clase <- (breaks[-length(breaks)] + breaks[-1]) / 2
+  
+  cortes <- cut(vector_datos, breaks = breaks, include.lowest = TRUE, right = FALSE, labels = labels_int)
+  conteo <- as.numeric(table(cortes))
+  
+  tb <- data.frame(
+    Intervalo = labels_int,
+    x_i = sprintf(fmt, marcas_clase),
+    f_i = conteo
+  ) %>%
+    mutate(
+      F_i = cumsum(f_i),
+      h_i = f_i / n_total,
+      H_i = cumsum(h_i),
+      p_i = h_i * 100,
+      P_i = H_i * 100,
+      h_i_txt = sprintf("%.4f", h_i),
+      H_i_txt = sprintf("%.4f", H_i),
+      p_i_txt = sprintf("%.2f%%", p_i),
+      P_i_txt = sprintf("%.2f%%", P_i)
+    ) %>%
+    select(Intervalo, x_i, f_i, F_i, h_i_txt, H_i_txt, p_i_txt, P_i_txt)
+  
+  fila_total <- data.frame(
+    Intervalo = "Total",
+    x_i = "-",
+    f_i = n_total,
+    F_i = "-",
+    h_i_txt = "1.0000",
+    H_i_txt = "-",
+    p_i_txt = "100.00%",
+    P_i_txt = "-"
+  )
+  
+  tabla_final <- rbind(tb, fila_total)
+  colnames(tabla_final) <- c(
+    paste0(nombre_columna, " [Lᵢ, Lₛ)"),
+    "Marca (xᵢ)", "fᵢ", "Fᵢ", "hᵢ", "Hᵢ", "pᵢ (%)", "Pᵢ (%)"
+  )
+  return(tabla_final)
+}
+
+# Función para formatear estadísticas descriptivas de psych::describe()
+formatear_describe <- function(vector_datos, nombre_variable = "Variable", digits = 2) {
+  desc <- as.data.frame(psych::describe(vector_datos))
+  fmt <- paste0("%.", digits, "f")
+  
+  res <- data.frame(
+    Variable = nombre_variable,
+    n = desc$n,
+    Media = sprintf(fmt, desc$mean),
+    `Desv. Est.` = sprintf(fmt, desc$sd),
+    Mediana = sprintf(fmt, desc$median),
+    Mínimo = sprintf(fmt, desc$min),
+    Máximo = sprintf(fmt, desc$max),
+    Rango = sprintf(fmt, desc$range),
+    Asimetría = sprintf(fmt, desc$skew),
+    Curtosis = sprintf(fmt, desc$kurtosis),
+    `Error Est.` = sprintf(fmt, desc$se),
+    check.names = FALSE
+  )
+  return(res)
+}
+```
+
+# SECCIÓN 1: VARIABLES NOMINALES
+
+Las **variables cualitativas nominales** categorizan a los elementos de estudio en grupos mutuamente excluyentes y colectivamente exhaustivos sin que exista un orden jerárquico natural entre ellos.
+
+## Sector Laboral (`Sector_Laboral`)
+
+- **Definición conceptual:** Representa el área funcional de la administración pública en la cual el funcionario presta sus servicios profesionales.
+- **Clasificación:** Cualitativa Nominal.
+- **Categorías observadas:** Seguridad, Educación, Sector Salud, Transporte y Administrativo.
+
+### Tabla de Distribución de Frecuencias
+
+```{r}
+tb_sector <- generar_tabla_cat(datos$Sector_Laboral, "Sector Laboral")
+
+kbl(tb_sector, caption = "Tabla 1. Distribución de frecuencias de los empleados por Sector Laboral") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) |>
+  row_spec(nrow(tb_sector), bold = TRUE, background = "#2b5c8f", color = "white")
+```
+
+### Gráfico Estadístico
+
+```{r}
+df_graf_sector <- as.data.frame(table(datos$Sector_Laboral))
+colnames(df_graf_sector) <- c("Sector", "Conteo")
+df_graf_sector <- df_graf_sector %>%
+  mutate(
+    Porcentaje = Conteo / sum(Conteo) * 100,
+    Etiqueta = paste0(Conteo, " (", sprintf("%.1f%%", Porcentaje), ")")
+  )
+
+ggplot(df_graf_sector, aes(x = reorder(Sector, -Conteo), y = Conteo, fill = Sector)) +
+  geom_col(width = 0.65, color = "black", alpha = 0.85, show.legend = FALSE) +
+  geom_text(aes(label = Etiqueta), vjust = -0.4, fontface = "bold", size = 4.2) +
+  scale_fill_brewer(palette = "Blues") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
+  labs(
+    title = "Distribución de Servidores Públicos por Sector Laboral",
+    subtitle = "Frecuencias absolutas y porcentajes (n = 200)",
+    x = "Sector de la Administración Pública",
+    y = "Número de Funcionarios (fᵢ)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    axis.text.x = element_text(face = "bold", angle = 15, hjust = 1)
+  )
+```
+
+### Interpretación Estadística
+
+1. **Moda de la distribución:** El sector con mayor concentración de personal es **Seguridad**, agrupando a $46$ funcionarios que representan el $23.00\%$ del total de encuestados.
+2. **Sectores misionales prioritarios:** El sector **Educación** constituye el segundo grupo con $44$ empleados ($22.00\%$), seguido por el **Sector Salud** con $40$ empleados ($20.00\%$). Conjuntamente, estas tres dependencias fundamentales del Estado concentran al $65.00\%$ ($130$ funcionarios) de la fuerza de trabajo analizada.
+3. **Sectores con menor proporción:** Por su parte, el sector **Transporte** cuenta con $36$ trabajadores ($18.00\%$) y el sector **Administrativo** con $34$ trabajadores ($17.00\%$).
+4. **Nota metodológica:** Al tratarse de una escala nominal, el orden de las categorías en la tabla es descriptivo. Las frecuencias acumuladas ($F_i, H_i, P_i$) dependen del orden de listado y carecen de un significado jerárquico intrínseco.
+
+---
+
+# SECCIÓN 2: VARIABLES ORDINALES
+
+Las **variables cualitativas ordinales** clasifican a los individuos en categorías que guardan una relación de orden o gradación lógica intrínseca, permitiendo la interpretación directa y coherente de las frecuencias acumuladas ($F_i$ y $P_i\%$).
+
+## Nivel de Ingresos (`Nivel_Ingresos`)
+
+- **Definición conceptual:** Clasificación socioeconómica del nivel salarial percibido por el servidor público dentro de la entidad gubernamental.
+- **Clasificación:** Cualitativa Ordinal.
+- **Orden jerárquico:** Baja $\prec$ Media $\prec$ Alta.
+
+### Tabla de Distribución de Frecuencias
+
+```{r}
+tb_ingresos <- generar_tabla_cat(datos$Nivel_Ingresos, "Nivel de Ingresos")
+
+kbl(tb_ingresos, caption = "Tabla 2. Distribución de frecuencias según el Nivel de Ingresos") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) |>
+  row_spec(nrow(tb_ingresos), bold = TRUE, background = "#2b5c8f", color = "white")
+```
+
+### Gráfico Estadístico
+
+```{r}
+df_graf_ing <- as.data.frame(table(datos$Nivel_Ingresos))
+colnames(df_graf_ing) <- c("Nivel", "Conteo")
+df_graf_ing <- df_graf_ing %>%
+  mutate(
+    Porcentaje = Conteo / sum(Conteo) * 100,
+    Etiqueta = paste0(Conteo, " (", sprintf("%.1f%%", Porcentaje), ")")
+  )
+
+ggplot(df_graf_ing, aes(x = Nivel, y = Conteo, fill = Nivel)) +
+  geom_col(width = 0.55, color = "black", alpha = 0.85, show.legend = FALSE) +
+  geom_text(aes(label = Etiqueta), vjust = -0.4, fontface = "bold", size = 4.3) +
+  scale_fill_manual(values = c("#74a9cf", "#2b8cbe", "#045a8d")) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
+  labs(
+    title = "Distribución por Nivel de Ingresos Percibido",
+    subtitle = "Escala jerárquica ordenada de menor a mayor (n = 200)",
+    x = "Nivel de Ingresos",
+    y = "Número de Funcionarios (fᵢ)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    axis.text.x = element_text(face = "bold")
+  )
+```
+
+### Interpretación Estadística
+
+1. **Estrato modal:** El nivel de ingresos **Bajo** concentra la mayor cantidad de trabajadores con $71$ personas, equivalente al $35.50\%$ de la muestra.
+2. **Análisis acumulado:** Un total de $134$ funcionarios ($F_2 = 134$) perciben un nivel de ingresos catalogado entre Bajo y Medio, lo que representa el $67.00\%$ acumulado ($P_2 = 67.00\%$) de la nómina estudiada.
+3. **Estrato superior:** Únicamente $66$ funcionarios ($33.00\%$) se ubican en el nivel de ingresos **Alto**. Se observa un reparto relativamente equilibrado entre los tres tercios de la escala, con una leve dominancia del segmento salarial inferior.
+
+## Satisfacción con el Servicio (`Satisfaccion_Servicio`)
+
+- **Definición conceptual:** Evaluación subjetiva del servidor público frente a la calidad, pertinencia y oportunidad de los servicios prestados o recibidos en su entorno laboral.
+- **Clasificación:** Cualitativa Ordinal (Escala tipo Likert de 5 niveles).
+- **Orden jerárquico:** Muy Insatisfecho $\prec$ Insatisfecho $\prec$ Neutral $\prec$ Satisfecho $\prec$ Muy Satisfecho.
+
+### Tabla de Distribución de Frecuencias
+
+```{r}
+tb_sat_serv <- generar_tabla_cat(datos$Satisfaccion_Servicio, "Satisfacción del Servicio")
+
+kbl(tb_sat_serv, caption = "Tabla 3. Distribución de frecuencias del nivel de Satisfacción con el Servicio") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) |>
+  row_spec(nrow(tb_sat_serv), bold = TRUE, background = "#2b5c8f", color = "white")
+```
+
+### Gráfico Estadístico
+
+```{r}
+df_graf_serv <- as.data.frame(table(datos$Satisfaccion_Servicio))
+colnames(df_graf_serv) <- c("Nivel", "Conteo")
+df_graf_serv <- df_graf_serv %>%
+  mutate(
+    Porcentaje = Conteo / sum(Conteo) * 100,
+    Etiqueta = paste0(Conteo, " (", sprintf("%.1f%%", Porcentaje), ")")
+  )
+
+ggplot(df_graf_serv, aes(x = Nivel, y = Conteo, fill = Nivel)) +
+  geom_col(width = 0.6, color = "black", alpha = 0.85, show.legend = FALSE) +
+  geom_text(aes(label = Etiqueta), vjust = -0.4, fontface = "bold", size = 4) +
+  scale_fill_manual(values = c("#cb181d", "#fb6a4a", "#9ecae1", "#41ab5d", "#006d2c")) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
+  labs(
+    title = "Percepción del Nivel de Satisfacción con el Servicio",
+    subtitle = "Escala Likert ordenada (n = 200)",
+    x = "Nivel de Satisfacción",
+    y = "Número de Funcionarios (fᵢ)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    axis.text.x = element_text(face = "bold", angle = 15, hjust = 1)
+  )
+```
+
+### Interpretación Estadística
+
+1. **Percepción de insatisfacción:** El $41.50\%$ de los funcionarios ($F_2 = 83$) se declara insatisfecho con el servicio, desglosado en un $21.50\%$ ($43$ personas) en "Muy Insatisfecho" y un $20.00\%$ ($40$ personas) en "Insatisfecho". La categoría "Muy Insatisfecho" resulta ser la moda general de la variable ($f_1 = 43$).
+2. **Postura neutral:** El $18.50\%$ ($37$ encuestados) manifiesta una posición intermedia o "Neutral", acumulando hasta allí al $60.00\%$ de la población ($F_3 = 120$).
+3. **Percepción favorable:** En el polo positivo, el $40.00\%$ ($80$ funcionarios) expresa una evaluación positiva, repartida entre "Satisfecho" ($19.00\%$, $38$ personas) y "Muy Satisfecho" ($21.00\%$, $42$ personas).
+4. **Bipolaridad observada:** La distribución presenta un patrón bimodal y dividido casi a partes iguales entre funcionarios insatisfechos ($41.50\%$) y satisfechos ($40.00\%$), lo cual indica que las intervenciones institucionales deben focalizarse prioritariamente en los focos de fricción que generan descontento extremo.
+
+## Frecuencia de Participación (`Frecuencia_Participacion`)
+
+- **Definición conceptual:** Nivel de involucramiento y concurrencia activa de los empleados en actividades, comités y programas de la administración pública.
+- **Clasificación:** Cualitativa Ordinal.
+- **Orden jerárquico:** Nunca $\prec$ Rara vez $\prec$ A veces $\prec$ Frecuentemente $\prec$ Siempre.
+
+### Tabla de Distribución de Frecuencias
+
+```{r}
+tb_frec_part <- generar_tabla_cat(datos$Frecuencia_Participacion, "Frecuencia de Participación")
+
+kbl(tb_frec_part, caption = "Tabla 4. Distribución de frecuencias de la Frecuencia de Participación") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) |>
+  row_spec(nrow(tb_frec_part), bold = TRUE, background = "#2b5c8f", color = "white")
+```
+
+### Gráfico Estadístico
+
+```{r}
+df_graf_frec <- as.data.frame(table(datos$Frecuencia_Participacion))
+colnames(df_graf_frec) <- c("Nivel", "Conteo")
+df_graf_frec <- df_graf_frec %>%
+  mutate(
+    Porcentaje = Conteo / sum(Conteo) * 100,
+    Etiqueta = paste0(Conteo, " (", sprintf("%.1f%%", Porcentaje), ")")
+  )
+
+ggplot(df_graf_frec, aes(x = Nivel, y = Conteo, fill = Nivel)) +
+  geom_col(width = 0.6, color = "black", alpha = 0.85, show.legend = FALSE) +
+  geom_text(aes(label = Etiqueta), vjust = -0.4, fontface = "bold", size = 4) +
+  scale_fill_brewer(palette = "PuBuGn") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
+  labs(
+    title = "Frecuencia de Participación en Actividades Institucionales",
+    subtitle = "Escala ordinal (n = 200)",
+    x = "Frecuencia de Participación",
+    y = "Número de Funcionarios (fᵢ)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    axis.text.x = element_text(face = "bold")
+  )
+```
+
+### Interpretación Estadística
+
+1. **Moda de participación:** La categoría con mayor número de servidores públicos es **Siempre**, registrando $48$ funcionarios ($24.00\%$).
+2. **Participación baja a moderada:** Más de la mitad de los trabajadores ($F_3 = 115$, es decir, el $57.50\%$) participa únicamente "A veces" o con menor periodicidad ($16.00\%$ "Nunca", $18.50\%$ "Rara vez" y $23.00\%$ "A veces").
+3. **Participación asidua:** El $42.50\%$ restante ($85$ funcionarios) interactúa frecuentemente en las iniciativas institucionales ($18.50\%$ "Frecuentemente" y $24.00\%$ "Siempre"), lo que evidencia un núcleo comprometido de servidores receptivos al desarrollo institucional.
+
+---
+
+# SECCIÓN 3: VARIABLES DISCRETAS
+
+Las **variables cuantitativas discretas** provienen de procesos de conteo y toman valores numéricos aislados pertenecientes al conjunto de los números enteros ($\mathbb{Z}^+$ o $\mathbb{N}_0$). Al tratarse de variables numéricas, se complementan con estadísticos de tendencia central, dispersión y forma calculados mediante `psych::describe()`.
+
+## Años de Experiencia (`Anos_Experiencia`)
+
+- **Definición conceptual:** Cantidad entera de años de servicio prestados en el sector público.
+- **Clasificación:** Cuantitativa Discreta.
+- **Rango observado:** Valores enteros comprendidos entre $0$ y $20$ años.
+
+### Tabla de Distribución de Frecuencias
+
+```{r}
+tb_exp <- generar_tabla_cat(factor(datos$Anos_Experiencia, levels = 0:20), "Años de Experiencia")
+
+kbl(tb_exp, caption = "Tabla 5. Distribución de frecuencias para Años de Experiencia (0 a 20 años)") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) |>
+  row_spec(nrow(tb_exp), bold = TRUE, background = "#2b5c8f", color = "white")
+```
+
+### Estadísticos Descriptivos (`psych::describe`)
+
+```{r}
+desc_exp <- formatear_describe(datos$Anos_Experiencia, "Años de Experiencia", digits = 2)
+
+kbl(desc_exp, caption = "Estadísticos descriptivos para Años de Experiencia (psych::describe)") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) |>
+  row_spec(0, bold = TRUE, background = "#34495e", color = "white")
+```
+
+### Gráfico Estadístico (Bastones y Dispersión Discreta)
+
+```{r}
+df_graf_exp <- as.data.frame(table(factor(datos$Anos_Experiencia, levels = 0:20)))
+colnames(df_graf_exp) <- c("Anos", "Conteo")
+df_graf_exp$Anos_num <- as.numeric(as.character(df_graf_exp$Anos))
+
+ggplot(df_graf_exp, aes(x = Anos_num, y = Conteo)) +
+  geom_segment(aes(x = Anos_num, xend = Anos_num, y = 0, yend = Conteo), color = "#2b5c8f", linewidth = 1.2) +
+  geom_point(color = "#045a8d", size = 3.5) +
+  geom_text(aes(label = Conteo), vjust = -0.7, fontface = "bold", size = 3.5) +
+  geom_vline(xintercept = mean(datos$Anos_Experiencia), color = "#cb181d", linetype = "dashed", linewidth = 1) +
+  annotate("text", x = mean(datos$Anos_Experiencia) + 0.3, y = max(df_graf_exp$Conteo) - 1, 
+           label = paste0("Media = ", sprintf("%.2f", mean(datos$Anos_Experiencia)), " años"), 
+           color = "#cb181d", fontface = "bold", hjust = 0) +
+  scale_x_continuous(breaks = 0:20) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(
+    title = "Distribución de Años de Experiencia en el Sector Público",
+    subtitle = "Gráfico de bastones con línea de promedio muestral (n = 200)",
+    x = "Años de Experiencia Laboral",
+    y = "Número de Funcionarios (fᵢ)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+```
+
+### Interpretación Estadística
+
+1. **Tendencia central:** La media de experiencia laboral es de $\bar{x} = 9.84$ años, complementada por una mediana de $Me = 10.00$ años. Esto indica que exactamente la mitad de los funcionarios ($50\%$) cuenta con $10$ o menos años de experiencia, mientras que la otra mitad supera dicha trayectoria.
+2. **Dispersión:** La desviación estándar es de $s = 6.15$ años sobre un rango completo de $20$ años ($Mín = 0, Máx = 20$), lo cual genera un coeficiente de variación de $CV = (6.15 / 9.84) \times 100 = 62.5\%$, reflejando una variabilidad moderada-alta en los tiempos de servicio.
+3. **Puntos modales:** El valor con mayor concurrencia individual es $1$ año de experiencia laboral ($f_i = 21$; $10.50\%$), seguido de $8$ años ($f_i = 17$; $8.50\%$).
+4. **Forma y simetría:** El coeficiente de asimetría de Fisher es de $0.01$, lo que denota una distribución prácticamente **simétrica** alrededor de la media. La curtosis de $-1.18$ indica una distribución **platicúrtica** (más aplanada que la normal), derivada de la repartición amplia de funcionarios en todas las antigüedades laborales.
+
+## Número de Hijos (`Numero_Hijos`)
+
+- **Definición conceptual:** Número total de hijos a cargo del empleado público encuestado.
+- **Clasificación:** Cuantitativa Discreta.
+- **Rango observado:** Valores enteros de $1$ a $5$ hijos.
+
+### Tabla de Distribución de Frecuencias
+
+```{r}
+tb_hijos <- generar_tabla_cat(factor(datos$Numero_Hijos, levels = 1:5), "Número de Hijos")
+
+kbl(tb_hijos, caption = "Tabla 6. Distribución de frecuencias para Número de Hijos (1 a 5)") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) |>
+  row_spec(nrow(tb_hijos), bold = TRUE, background = "#2b5c8f", color = "white")
+```
+
+### Estadísticos Descriptivos (`psych::describe`)
+
+```{r}
+desc_hijos <- formatear_describe(datos$Numero_Hijos, "Número de Hijos", digits = 2)
+
+kbl(desc_hijos, caption = "Estadísticos descriptivos para Número de Hijos (psych::describe)") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) |>
+  row_spec(0, bold = TRUE, background = "#34495e", color = "white")
+```
+
+### Gráfico Estadístico (Barras y Conteo)
+
+```{r}
+df_graf_hijos <- as.data.frame(table(factor(datos$Numero_Hijos, levels = 1:5)))
+colnames(df_graf_hijos) <- c("Hijos", "Conteo")
+df_graf_hijos <- df_graf_hijos %>%
+  mutate(
+    Porcentaje = Conteo / sum(Conteo) * 100,
+    Etiqueta = paste0(Conteo, " (", sprintf("%.1f%%", Porcentaje), ")")
+  )
+
+ggplot(df_graf_hijos, aes(x = Hijos, y = Conteo, fill = Hijos)) +
+  geom_col(width = 0.55, color = "black", alpha = 0.85, show.legend = FALSE) +
+  geom_text(aes(label = Etiqueta), vjust = -0.4, fontface = "bold", size = 4.3) +
+  geom_hline(yintercept = mean(df_graf_hijos$Conteo), linetype = "dotted", color = "gray20", linewidth = 0.8) +
+  scale_fill_brewer(palette = "Blues") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
+  labs(
+    title = "Distribución de Carga Familiar por Número de Hijos",
+    subtitle = "Frecuencias y porcentajes para valores de 1 a 5 hijos (n = 200)",
+    x = "Número de Hijos",
+    y = "Número de Funcionarios (fᵢ)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    axis.text.x = element_text(face = "bold")
+  )
+```
+
+### Interpretación Estadística
+
+1. **Tendencia central:** En promedio, los servidores públicos tienen $\bar{x} = 3.03$ hijos, con una mediana de $Me = 3.00$ hijos y una desviación estándar de $s = 1.40$ hijos.
+2. **Uniformidad de la distribución:** Los datos revelan una asombrosa equidad en la proporción de funcionarios para cada cantidad de hijos:
+   - $1$ hijo: $39$ funcionarios ($19.50\%$).
+   - $2$ hijos: $39$ funcionarios ($19.50\%$).
+   - $3$ hijos: $40$ funcionarios ($20.00\%$).
+   - $4$ hijos: $42$ funcionarios ($21.00\%$, moda de la muestra).
+   - $5$ hijos: $40$ funcionarios ($20.00\%$).
+3. **Análisis acumulado:** El $59.00\%$ ($F_3 = 118$) de los empleados tiene $3$ o menos hijos ($P_3 = 59.00\%$), mientras que el $41.00\%$ restante tiene familias numerosas de $4$ o $5$ hijos.
+4. **Forma:** El sesgo es nulo ($Asimetría = -0.07$), respaldando la simetría perfecta en la conformación de los hogares de los funcionarios.
+
+---
+
+# SECCIÓN 4: VARIABLES CONTINUAS (AGRUPADAS POR INTERVALOS)
+
+Las **variables cuantitativas continuas** pueden asumir cualquier valor dentro de un intervalo real continuo ($\mathbb{R}$). Para su análisis tabular descriptivo se organizan en clases o intervalos disjuntos empleando la **Regla de Sturges**, la cual calcula el número óptimo de clases $k$ en función del tamaño muestral $n$:
+
+$$k = \lceil 1 + 3.322 \log_{10}(200) \rceil = \lceil 8.644 \rceil = 9 \text{ intervalos}$$
+
+Para cada intervalo $[L_i, L_s)$ se determina su **marca de clase** ($x_i = \frac{L_i + L_s}{2}$) y su amplitud ($A = \frac{\text{Rango}}{k}$).
+
+## Salario Mensual (`Salario`)
+
+- **Definición conceptual:** Remuneración bruta mensual en miles de pesos colombianos (COP). Por ejemplo, un valor de $1085$ equivale a $\$1.085.000$ COP, y un valor de $4963$ a $\$4.963.000$ COP.
+- **Clasificación:** Cuantitativa Continua agrupada en $9$ intervalos.
+
+### Tabla de Distribución de Frecuencias
+
+```{r}
+tb_salario <- generar_tabla_continua(datos$Salario, k = 9, digits = 2, nombre_columna = "Salario (miles COP)")
+
+kbl(tb_salario, caption = "Tabla 7. Distribución de frecuencias del Salario Mensual (9 intervalos de Sturges)") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) |>
+  row_spec(nrow(tb_salario), bold = TRUE, background = "#2b5c8f", color = "white")
+```
+
+### Estadísticos Descriptivos (`psych::describe`)
+
+```{r}
+desc_salario <- formatear_describe(datos$Salario, "Salario (miles COP)", digits = 2)
+
+kbl(desc_salario, caption = "Estadísticos descriptivos del Salario Mensual en miles de COP (psych::describe)") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) |>
+  row_spec(0, bold = TRUE, background = "#34495e", color = "white")
+```
+
+### Gráfico Estadístico (Histograma, Polígono de Frecuencias y Media)
+
+```{r}
+breaks_sal <- seq(min(datos$Salario), max(datos$Salario), length.out = 10)
+
+ggplot(datos, aes(x = Salario)) +
+  geom_histogram(breaks = breaks_sal, fill = "#2b5c8f", color = "white", alpha = 0.75) +
+  geom_freqpoly(breaks = breaks_sal, color = "#cb181d", linewidth = 1.1) +
+  geom_vline(xintercept = mean(datos$Salario), color = "#cb181d", linetype = "dashed", linewidth = 1.1) +
+  annotate("text", x = mean(datos$Salario) + 50, y = 30, 
+           label = paste0("Media = $", sprintf("%.2f", mean(datos$Salario)), " (mil COP)"), 
+           color = "#cb181d", fontface = "bold", hjust = 0) +
+  scale_x_continuous(breaks = round(breaks_sal, 0)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(
+    title = "Distribución del Salario Mensual de los Servidores Públicos",
+    subtitle = "Histograma de 9 intervalos con polígono de frecuencias y media aritmética",
+    x = "Salario Mensual (en miles de pesos COP)",
+    y = "Número de Funcionarios (fᵢ)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    axis.text.x = element_text(angle = 30, hjust = 1)
+  )
+```
+
+### Interpretación Estadística
+
+1. **Promedio y mediana salarial:** El salario promedio de los funcionarios es de $\bar{x} = 3235.87$ miles de pesos, lo que equivale a **\$3.235.870 COP**, con un error estándar de $SE = \$82.630$ COP. La mediana se ubica en **\$3.412.000 COP** ($Me = 3412.00$), indicando que el $50\%$ de los empleados devenga un sueldo menor o igual a este monto.
+2. **Dispersión salarial:** La desviación estándar es de $s = 1168.60$ miles de pesos (\$1.168.600 COP) sobre un rango de \$3.878.000 COP ($Mín = \$1.085.000, Máx = \$4.963.000$), arrojando un coeficiente de variación de $CV = (1168.60 / 3235.87) \times 100 = 36.11\%$, lo que denota una variabilidad moderada en la escala salarial del sector.
+3. **Intervalo modal:** La clase con mayor concentración de trabajadores corresponde al intervalo superior $[4532.11, 4963.00]$ miles de pesos, con $33$ empleados ($16.50\%$), seguido por el intervalo $[4101.22, 4532.11)$ con $28$ empleados ($14.00\%$). Conjuntamente, el $30.50\%$ de la muestra devenga salarios en los dos escalafones más altos.
+4. **Forma de la distribución:** El coeficiente de asimetría de $-0.28$ señala un sesgo negativo ligero hacia los ingresos medios y altos, ratificado por una curtosis de $-1.20$.
+
+## Satisfacción Laboral (`Satisfaccion_Laboral`)
+
+- **Definición conceptual:** Nivel de complacencia y bienestar con el clima organizacional evaluado en un índice numérico continuo de $0.5$ a $2.5$ puntos.
+- **Clasificación:** Cuantitativa Continua agrupada en $9$ intervalos.
+
+### Tabla de Distribución de Frecuencias
+
+```{r}
+tb_sat_lab <- generar_tabla_continua(datos$Satisfaccion_Laboral, k = 9, digits = 2, nombre_columna = "Satisfacción Laboral")
+
+kbl(tb_sat_lab, caption = "Tabla 8. Distribución de frecuencias de Satisfacción Laboral (9 intervalos)") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) |>
+  row_spec(nrow(tb_sat_lab), bold = TRUE, background = "#2b5c8f", color = "white")
+```
+
+### Estadísticos Descriptivos (`psych::describe`)
+
+```{r}
+desc_sat_lab <- formatear_describe(datos$Satisfaccion_Laboral, "Satisfacción Laboral", digits = 2)
+
+kbl(desc_sat_lab, caption = "Estadísticos descriptivos de Satisfacción Laboral (psych::describe)") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) |>
+  row_spec(0, bold = TRUE, background = "#34495e", color = "white")
+```
+
+### Gráfico Estadístico (Histograma y Polígono)
+
+```{r}
+breaks_sat_lab <- seq(min(datos$Satisfaccion_Laboral), max(datos$Satisfaccion_Laboral), length.out = 10)
+
+ggplot(datos, aes(x = Satisfaccion_Laboral)) +
+  geom_histogram(breaks = breaks_sat_lab, fill = "#3182bd", color = "white", alpha = 0.75) +
+  geom_freqpoly(breaks = breaks_sat_lab, color = "#cb181d", linewidth = 1.1) +
+  geom_vline(xintercept = mean(datos$Satisfaccion_Laboral), color = "#cb181d", linetype = "dashed", linewidth = 1.1) +
+  annotate("text", x = mean(datos$Satisfaccion_Laboral) + 0.05, y = 28, 
+           label = paste0("Media = ", sprintf("%.2f", mean(datos$Satisfaccion_Laboral)), " pts"), 
+           color = "#cb181d", fontface = "bold", hjust = 0) +
+  scale_x_continuous(breaks = round(breaks_sat_lab, 2)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(
+    title = "Distribución del Índice de Satisfacción Laboral",
+    subtitle = "Histograma de 9 intervalos con polígono de frecuencias y media",
+    x = "Puntaje de Satisfacción Laboral (0.5 a 2.5 pts)",
+    y = "Número de Funcionarios (fᵢ)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+```
+
+### Interpretación Estadística
+
+1. **Nivel central:** La media de satisfacción laboral es de $\bar{x} = 1.60$ puntos (con una desviación estándar de $s = 0.54$ puntos) y una mediana de $Me = 1.61$ puntos. Los puntajes oscilan desde un mínimo de $0.54$ hasta un máximo de $2.50$ puntos.
+2. **Intervalos modales:** La mayor densidad de respuestas se registra en el intervalo central $[1.41, 1.63)$ con $31$ trabajadores ($15.50\%$), seguido por el intervalo $[2.06, 2.28)$ con $30$ empleados ($15.00\%$).
+3. **Distribución acumulada:** El $51.00\%$ de los funcionarios se sitúa en puntuaciones iguales o inferiores a $1.63$ puntos ($F_5 = 102$). El $49.00\%$ restante ($98$ funcionarios) puntúa en niveles óptimos superiores a $1.63$.
+4. **Forma:** La asimetría es muy baja ($-0.15$) y la curtosis es de $-1.07$, demostrando que la satisfacción se halla dispersa armónicamente a lo largo de toda la escala.
+
+## Edad (`Edad`)
+
+- **Definición conceptual:** Edad cronológica del servidor público en años cumplidos.
+- **Clasificación:** Cuantitativa Continua agrupada en $9$ intervalos.
+- **Rango observado:** De $20$ a $60$ años.
+
+### Tabla de Distribución de Frecuencias
+
+```{r}
+tb_edad <- generar_tabla_continua(datos$Edad, k = 9, digits = 2, nombre_columna = "Edad (años)")
+
+kbl(tb_edad, caption = "Tabla 9. Distribución de frecuencias de la Edad de los funcionarios (9 intervalos)") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) |>
+  row_spec(nrow(tb_edad), bold = TRUE, background = "#2b5c8f", color = "white")
+```
+
+### Estadísticos Descriptivos (`psych::describe`)
+
+```{r}
+desc_edad <- formatear_describe(datos$Edad, "Edad (años)", digits = 2)
+
+kbl(desc_edad, caption = "Estadísticos descriptivos de la Edad de los funcionarios (psych::describe)") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) |>
+  row_spec(0, bold = TRUE, background = "#34495e", color = "white")
+```
+
+### Gráfico Estadístico (Histograma y Polígono)
+
+```{r}
+breaks_edad <- seq(min(datos$Edad), max(datos$Edad), length.out = 10)
+
+ggplot(datos, aes(x = Edad)) +
+  geom_histogram(breaks = breaks_edad, fill = "#41b6c4", color = "white", alpha = 0.75) +
+  geom_freqpoly(breaks = breaks_edad, color = "#cb181d", linewidth = 1.1) +
+  geom_vline(xintercept = mean(datos$Edad), color = "#cb181d", linetype = "dashed", linewidth = 1.1) +
+  annotate("text", x = mean(datos$Edad) + 1, y = 25, 
+           label = paste0("Media = ", sprintf("%.2f", mean(datos$Edad)), " años"), 
+           color = "#cb181d", fontface = "bold", hjust = 0) +
+  scale_x_continuous(breaks = round(breaks_edad, 1)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(
+    title = "Distribución de la Edad de los Servidores Públicos",
+    subtitle = "Histograma de 9 intervalos con polígono de frecuencias y media (20 a 60 años)",
+    x = "Edad en Años Cumplidos",
+    y = "Número de Funcionarios (fᵢ)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+```
+
+### Interpretación Estadística
+
+1. **Parámetros centrales:** La edad promedio del personal es de $\bar{x} = 39.92$ años con una desviación estándar de $s = 11.92$ años. La mediana es de $Me = 39.50$ años, prácticamente idéntica a la media.
+2. **Equilibrio etario:** El coeficiente de asimetría es exactamente de $0.00$, lo cual evidencia una **simetría perfecta**. La edad mínima es de $20$ años y la máxima de $60$ años ($Rango = 40$ años).
+3. **Distribución por rangos:** Cada uno de los $9$ intervalos congrega entre $19$ y $26$ funcionarios (entre el $9.50\%$ y el $13.00\%$), reflejando una estructura demográfica rectangular y muy equilibrada:
+   - Jóvenes ($20$ a $24.4$ años): $26$ funcionarios ($13.00\%$).
+   - Adultos jóvenes ($24.4$ a $37.8$ años): $63$ funcionarios ($31.50\%$).
+   - Adultos medios ($37.8$ a $51.1$ años): $64$ funcionarios ($32.00\%$).
+   - Adultos mayores ($51.1$ a $60$ años): $47$ funcionarios ($23.50\%$).
+4. Esta composición asegura experiencia consolidada sin comprometer el recambio generacional de la entidad pública.
+
+## Participación en Programas (`Participacion_Programas`)
+
+- **Definición conceptual:** Proporción de cumplimiento y asistencia del servidor a los programas institucionales de formación, capacitación y bienestar (rango de $0.1$ a $1.0$, equivalente a $10\%$ a $100\%$).
+- **Clasificación:** Cuantitativa Continua agrupada en $9$ intervalos.
+
+### Tabla de Distribución de Frecuencias
+
+```{r}
+tb_prog <- generar_tabla_continua(datos$Participacion_Programas, k = 9, digits = 3, nombre_columna = "Participación Programas")
+
+kbl(tb_prog, caption = "Tabla 10. Distribución de frecuencias de Participación en Programas (9 intervalos)") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) |>
+  row_spec(nrow(tb_prog), bold = TRUE, background = "#2b5c8f", color = "white")
+```
+
+### Estadísticos Descriptivos (`psych::describe`)
+
+```{r}
+desc_prog <- formatear_describe(datos$Participacion_Programas, "Participación Programas", digits = 2)
+
+kbl(desc_prog, caption = "Estadísticos descriptivos de Participación en Programas (psych::describe)") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) |>
+  row_spec(0, bold = TRUE, background = "#34495e", color = "white")
+```
+
+### Gráfico Estadístico (Histograma y Polígono)
+
+```{r}
+breaks_prog <- seq(min(datos$Participacion_Programas), max(datos$Participacion_Programas), length.out = 10)
+
+ggplot(datos, aes(x = Participacion_Programas)) +
+  geom_histogram(breaks = breaks_prog, fill = "#225ea8", color = "white", alpha = 0.75) +
+  geom_freqpoly(breaks = breaks_prog, color = "#cb181d", linewidth = 1.1) +
+  geom_vline(xintercept = mean(datos$Participacion_Programas), color = "#cb181d", linetype = "dashed", linewidth = 1.1) +
+  annotate("text", x = mean(datos$Participacion_Programas) + 0.02, y = 30, 
+           label = paste0("Media = ", sprintf("%.2f", mean(datos$Participacion_Programas) * 100), "%"), 
+           color = "#cb181d", fontface = "bold", hjust = 0) +
+  scale_x_continuous(breaks = round(breaks_prog, 2), labels = scales::percent_format(accuracy = 1)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(
+    title = "Distribución de Participación en Programas de Capacitación",
+    subtitle = "Histograma de 9 intervalos con polígono de frecuencias y media",
+    x = "Tasa de Participación (0.10 a 1.00)",
+    y = "Número de Funcionarios (fᵢ)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+```
+
+### Interpretación Estadística
+
+1. **Tasa de participación promedio:** La tasa media de participación se sitúa en $\bar{x} = 0.54$ ($54.00\%$), con una desviación típica de $s = 0.26$ ($26.00\%$). La mediana es de $Me = 0.50$ ($50.00\%$).
+2. **Intervalo modal:** La clase con mayor cantidad de participantes es $[0.394, 0.492)$ con $34$ empleados ($17.00\%$), seguida por el grupo de alta adherencia formativa $[0.884, 0.982]$ con $25$ trabajadores ($12.50\%$).
+3. **Distribución acumulada:** El $49.50\%$ de los funcionarios asiste al $49.2\%$ o menos de las jornadas de formación ($F_4 = 99$), en tanto que el $50.50\%$ restante ($101$ funcionarios) supera dicho umbral, evidenciando un compromiso notable con la capacitación laboral continua.
+4. **Forma:** El sesgo es muy leve hacia la derecha ($Asimetría = 0.07$), ratificando un comportamiento equilibrado y disperso entre los niveles básico, intermedio y avanzado de capacitación.
+
+---
+
+# Conclusiones y Síntesis General
+
+El análisis exhaustivo de las $10$ variables de la base de datos `sector.xlsx` ($n = 200$) permite extraer conclusiones sustantivas sobre la dinámica del talento humano en la administración pública:
+
+1. **Estructura y representatividad laboral:** La muestra distribuye al personal de manera coherente entre los sectores prioritarios del Estado: Seguridad ($23\%$), Educación ($22\%$) y Salud ($20\%$).
+2. **Condiciones socioeconómicas y salariales:** El salario medio se sitúa en $\$3.235.870$ COP con una marcada concentración en niveles de ingreso bajos y medios ($67.00\%$), complementado por un promedio de carga familiar de $3.03$ hijos por empleado.
+3. **Clima y satisfacción organizacional:** La percepción del servicio público denota una polarización bimodal evidente ($41.5\%$ de insatisfacción frente a $40.0\%$ de satisfacción), mientras que la satisfacción laboral promedio se mantiene en un nivel favorable de $1.60$ puntos sobre $2.50$.
+4. **Talento humano y desarrollo institucional:** Con una edad media de $39.92$ años y una trayectoria laboral promedio de $9.84$ años, la entidad cuenta con un balance óptimo entre experiencia y adaptabilidad, respaldado por una tasa media de participación del $54\%$ en programas de capacitación.
